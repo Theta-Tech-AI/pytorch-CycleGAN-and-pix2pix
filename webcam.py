@@ -36,6 +36,8 @@ from util.util import tensor2im
 import torchvision.transforms as transforms
 
 import time
+import cv2
+import numpy as np
 
 opt = TestOptions().parse()
 #--dataroot ./datasets/selfies --direction AtoB --model pix2pix --name selfies_pix2pix --num_test 400 --gpu_ids -1
@@ -52,16 +54,29 @@ dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and oth
 model = create_model(opt)      # create a model given opt.model and other options
 model.setup(opt)               # regular setup: load and print networks; create schedulers
 
+window_name = 'Press Esc to cancel'
+cv2.namedWindow(window_name)
+
 tic = time.perf_counter()
 count = 0
-for i, data in enumerate(dataset):
-    if i > opt.num_test:
-        break
+while True:
+    data = next(iter(dataset))
     count += 1
     model.real_A = data['A'].to(model.device)
     model.forward()
+    raw = tensor2im(model.real_A)
     fake = tensor2im(model.fake_B)
+    fake = ((fake.astype(np.float16) + raw.astype(np.float16))/2).astype(fake.dtype)
+    output_image = np.concatenate((raw, fake), axis=1)
+    cv2.imshow(window_name, cv2.cvtColor(output_image, cv2.COLOR_RGB2BGR) )
+    key = cv2.waitKey(10)
+    if key == 27: break
+
 toc = time.perf_counter()
 seconds = toc - tic
+
 print(f'Performed {count} enhancements in {seconds:0.1f}s')
+print(f'{count/seconds:0.1f} enhancements/sec')
 print(f'ms/enhancement = {1000*seconds//count}')
+
+cv2.destroyWindow(window_name)
